@@ -13,6 +13,8 @@ sudo service docker restart
 # sudo dpkg -i minikube_latest_amd64.deb
 # rm -rf minikube_latest_amd64.deb
 
+# minikube start --extra-config=apiserver.authorization-mode=Node,RBAC
+
 Follow the steps to complete the handson
 
 Your task is to spin up three applications/pods inside a kubernetes cluster. A node-mongo-page-hit application that connects to a mongo db pod and an independent nginx pod.
