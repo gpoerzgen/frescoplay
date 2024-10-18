@@ -1,0 +1,239 @@
+
+Handson:
+
+Hands-on Scenario Problem statement
+Minikube installation
+
+sudo apt install docker.io -y 
+sudo systemctl unmask docker
+sudo service docker restart
+
+# chmod 777 /var/run/docker.sock
+# curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube_latest_amd64.deb
+# sudo dpkg -i minikube_latest_amd64.deb
+# rm -rf minikube_latest_amd64.deb
+
+Follow the steps to complete the handson
+
+Your task is to spin up three applications/pods inside a kubernetes cluster. A node-mongo-page-hit application that connects to a mongo db pod and an independent nginx pod.
+
+Step - 1
+
+Check whether docker & minikube are properly install:wed and configured. Start Minikube and execute this command to sync host docker with minikube docker eval $(minikube docker-env)
+
+Step - 2
+
+Create a folder named kubernetes-page-count in Desktop and build a docker mongo image with name fresco/node-mongo-page-hit:latest
+
+# mkdir /home/<USER>/Schreibtisch/kubernetes-page-count
+
+# docker pull fresco/node-mongo-page-hit:latest
+
+
+Step - 3
+
+Create a kubernetes namespace : frescons
+
+# kubectl create ns frescons
+
+
+
+Step - 4
+
+Create the following Deployments
+
+A) name: mongo, namespace: frescons, labels: {app: mongo}, image: 'mongo:4.1', containerPort: 27017
+
+File: mongo.yaml
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo
+  namespace: frescons
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongo
+  template:
+    metadata:
+      labels:
+        app: mongo
+    spec:
+      containers:
+      - name: mongo
+        image: mongo:4.1
+        ports:
+        - containerPort: 27017
+          protocol: TCP
+
+
+B) name: node-mongo-page-hit, namespace: frescons, labels: {app: node-mongo-page-hit}, imagePullPolicy: Never, image: 'fresco/node-mongo-page-hit:latest', containerPort: 8000, env: [{name: PORT, value: '8000'}]
+
+File: node-mongo-page-hit.yaml
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-mongo-page-hit
+  namespace: frescons
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-mongo-page-hit
+  template:
+    metadata:
+      labels:
+        app: node-mongo-page-hit
+    spec:
+      containers:
+      - name: node-mongo-page-hit
+        image: fresco/node-mongo-page-hit:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8000
+          protocol: TCP
+        env:
+        - name: PORT
+          value: '8000'
+
+
+c) name: nginx, namespace: frescons, labels: {app: nginx}, image: 'nginx', containerPort: 80
+
+for nginx application define a lifecylce field that would write the string Hello from Fresco Team into the file /usr/share/nginx/html/index.html on postStart
+
+File: nginx.yaml
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+  namespace: frescons
+spec:
+  containers:
+  - name: lifecycle-hook-container
+    image: nginx
+    ports:
+    - containerPort: 80
+    lifecycle:
+      postStart:
+        exec:
+          command: ["/bin/sh", "-c", "echo Hello from Fresco Team> /usr/share/message"]
+  
+  
+Step - 5
+
+Create the following Services
+
+A) name: mongo, namespace: frescons, port: 27017, targetPort: 27017
+
+File: mongo-service.yaml
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo
+  namespace: frescons
+spec:
+  ports:
+    - port: 27017
+      targetPort: 27017
+  selector:
+    app: mongo
+
+
+B) name: node-mongo-page-hit, namespace: frescons, port: 8000, targetPort: 8000, nodePort: 30800
+
+File: node-mongo-page-hit-service.yaml
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-mongo-page-hit
+  namespace: frescons
+spec:
+  selector:
+    app: node-mongo-page-hit
+  type: NodePort
+  ports:
+    - port: 8000
+      targetPort: 8000
+      nodePort: 30800
+
+c) name: nginx, namespace: frescons, port: 80, targetPort: 80, nodePort: 30080
+
+File: nginx-service.yaml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  namespace: frescons
+spec:
+  selector:
+    app: nginx
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8003
+    nodePort: 30080
+  type: NodePort
+
+
+Step - 6
+
+
+A) Enable ingress addon in minukube. 
+
+# minikube addons enable ingress
+
+
+B) Create an Ingress router that will route the following paths to respective apps
+
+
+name: fresco-ingress, namespace: frescons
+
+path: /nginx, backend: {serviceName: nginx, servicePort: 80}
+
+path: /app, backend: {serviceName: node-mongo-page-hit, servicePort: 8000}
+
+
+File: fresco-ingress.yaml
+
+---
+apiVersion: extensions/v1
+kind: Ingress
+metadata:
+  name: fresco-ingress
+  namespace: frescons 
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+    http:
+      paths:
+      - path: /nginx
+        backend:
+          serviceName: nginx
+          servicePort: 80
+      - path: /app
+        backend:
+          serviceName: node-mongo-page-hit
+          servicePort: 8000
+
+Step - 7
+
+Hit http:localhost/nginx and http:localhost/app and see if everything works fine.
+
+Use curl with below commands to check.
+
+curl -kL http:localhost/nginx should return Hello from Fresco Team
+
+curl -kL http:localhost/app should return page hit count is: 1
